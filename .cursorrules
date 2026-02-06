@@ -1,0 +1,4 @@
+# Project Rules
+
+1.  **Environment**: Always use the `baseagent` conda environment for all terminal execution, python scripts, and testing.
+    -   Command prefix: `conda run -n baseagent ...` or ensure the shell has `baseagent` activated.

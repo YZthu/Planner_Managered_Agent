@@ -1,0 +1,68 @@
+# Agent Platform Configuration
+# =============================
+# This is the unified configuration file for the Agent Platform.
+# Edit this file to customize all platform settings.
+# 
+# API keys should be placed in .env file for security.
+
+# Server Settings
+server:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "*"
+
+# LLM Provider Settings
+llm:
+  # Provider to use: gemini, deepseek, or openai
+  provider: "deepseek"
+  
+  # Gemini (Google AI) Configuration
+  gemini:
+    model: "gemini-2.5-flash"
+    temperature: 0.7
+    max_tokens: 8192
+  
+  # DeepSeek Configuration
+  deepseek:
+    model: "deepseek-chat"
+    base_url: "https://api.deepseek.com"
+    temperature: 0.7
+    max_tokens: 4096
+  
+  # OpenAI Configuration
+  openai:
+    model: "gpt-4o-mini"
+    temperature: 0.7
+    max_tokens: 4096
+
+# Agent Settings
+agent:
+  # Maximum number of subagents running concurrently
+  max_concurrent_subagents: 4
+  
+  # Timeout for subagent execution (seconds)
+  subagent_timeout_seconds: 120
+  
+  # Maximum tool calls per agent turn
+  max_tool_calls_per_turn: 10
+  
+  # Maximum conversation history messages to keep
+  max_history_messages: 20
+  
+  
+  # Enable explicit thinking/reasoning steps
+  enable_thinking: true
+  
+  # Message debounce time in milliseconds (combine rapid messages)
+  debounce_ms: 1000
+
+# Paths (relative to agent_platform directory)
+paths:
+  skills_dir: "skills"
+  data_dir: "data"
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Platform</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🤖</span>
+                <h1>Agent Platform</h1>
+            </div>
+            <div class="header-actions">
+                <div class="provider-selector">
+                    <label for="providerSelect">🧠</label>
+                    <select id="providerSelect" title="Select LLM Provider">
+                        <option value="gemini">Gemini</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="openai">ChatGPT</option>
+                    </select>
+                </div>
+                <button class="btn btn-ghost" id="clearBtn" title="Clear chat">
+                    <span>🗑️</span> Clear
+                </button>
+                <div class="status-indicator" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- Sidebar: Subagent Status -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <h2>🔄 Active Subagents</h2>
+                    <span class="badge" id="subagentCount">0</span>
+                </div>
+                <div class="subagent-list" id="subagentList">
+                    <div class="empty-state">
+                        <span class="empty-icon">🎯</span>
+                        <p>No active subagents</p>
+                        <small>Subagents will appear here when spawned</small>
+                    </div>
+                </div>
+                <div class="queue-status" id="queueStatus">
+                    <div class="queue-item">
+                        <span class="queue-label">Active</span>
+                        <span class="queue-value" id="activeCount">0</span>
+                    </div>
+                    <div class="queue-item">
+                        <span class="queue-label">Queued</span>
+                        <span class="queue-value" id="queuedCount">0</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Chat Area -->
+            <main class="chat-container">
+                <div class="messages" id="messages">
+                    <div class="welcome-message">
+                        <div class="welcome-icon">✨</div>
+                        <h2>Welcome to Agent Platform</h2>
+                        <p>I'm an AI assistant with the ability to spawn subagents for parallel work.</p>
+                        <div class="capabilities">
+                            <div class="capability">
+                                <span class="cap-icon">🔍</span>
+                                <span>Web Search</span>
+                            </div>
+                            <div class="capability">
+                                <span class="cap-icon">🤖</span>
+                                <span>Spawn Subagents</span>
+                            </div>
+                            <div class="capability">
+                                <span class="cap-icon">⚡</span>
+                                <span>Parallel Processing</span>
+                            </div>
+                        </div>
+                        <p class="try-prompt">Try: "Research the latest AI news and summarize in 3 bullet points"</p>
+                    </div>
+                </div>
+
+                <div class="thinking-indicator" id="thinkingIndicator" style="display: none;">
+                    <div class="thinking-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <span class="thinking-text" id="thinkingText">Thinking...</span>
+                </div>
+
+                <form class="input-form" id="chatForm">
+                    <div class="input-wrapper">
+                        <textarea id="messageInput" placeholder="Type your message..." rows="1" autofocus></textarea>
+                        <button type="submit" class="send-btn" id="sendBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                </form>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
