@@ -175,9 +175,9 @@ provider = create_deepseek_provider()  # Uses config from YAML
 
 | Plugin | Tools Provided | Dependencies |
 | :--- | :--- | :--- |
-| **CorePlugin** | `web_search`, `spawn_subagent` | None |
+| **CorePlugin** | `web_search`, `web_fetch`, `spawn_subagent` | None |
 | **MemoryPlugin** | `add_memory`, `query_memory` | ChromaDB |
-| **BrowserPlugin** | `browser_navigate`, `browser_content` | Playwright |
+| **BrowserPlugin** | `browser_navigate`, `browser_content`, `browser_click`, `browser_type`, `browser_scroll`, `browser_screenshot` | Playwright |
 | **NetworkPlugin** | Discovery, remote access | zeroconf, netifaces |
 
 ### Creating a Plugin
@@ -215,6 +215,8 @@ Playwright-based web automation:
 - Headless Chrome control
 - DOM content extraction
 - Navigation and interaction
+- Text input with `browser_type`
+- Page scrolling with `browser_scroll`
 
 ```yaml
 browser:
@@ -293,7 +295,8 @@ class BaseTool(ABC):
 
 | Tool | Location | Description |
 | :--- | :--- | :--- |
-| `web_search` | `tools/web_search.py` | Google Custom Search API |
+| `web_search` | `tools/web_search.py` | Multi-provider search (DuckDuckGo, Brave, Perplexity, Serper) with region/language support |
+| `web_fetch` | `tools/web_fetch.py` | URL content extraction with SSRF protection |
 | `spawn_subagent` | `tools/spawn_subagent.py` | Create child agents for parallel tasks |
 
 ### Tool Execution

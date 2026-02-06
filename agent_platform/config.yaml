@@ -80,7 +80,7 @@ plugins:
   enabled:
     - "core"      # Essential tools: web_search, spawn_subagent
     - "memory"    # Long-term memory: add_memory, query_memory (ChromaDB)
-    - "browser"   # Web browsing: navigate, click, content, screenshot (Playwright)
+    - "browser"   # Web browsing: navigate, content, click, type, scroll, screenshot (Playwright)
     - "network"   # Network discovery: get_network_status, mDNS (zeroconf)
 
 browser:

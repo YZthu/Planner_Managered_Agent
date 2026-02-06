@@ -7,7 +7,10 @@ import shutil
 # Add project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from backend.plugins.browser import BrowserPlugin, BrowserNavigateTool, BrowserContentTool, BrowserScreenshotTool
+from backend.plugins.browser import (
+    BrowserPlugin, BrowserNavigateTool, BrowserContentTool, 
+    BrowserScreenshotTool, BrowserTypeTool, BrowserScrollTool
+)
 from backend.config import config
 
 class TestBrowserPlugin(unittest.TestCase):
@@ -47,6 +50,8 @@ class TestBrowserPlugin(unittest.TestCase):
             nav_tool = next(t for t in tools if t.name == "browser_navigate")
             content_tool = next(t for t in tools if t.name == "browser_content")
             screenshot_tool = next(t for t in tools if t.name == "browser_screenshot")
+            type_tool = next(t for t in tools if t.name == "browser_type")
+            scroll_tool = next(t for t in tools if t.name == "browser_scroll")
             
             # 2. Navigate (Use example.com which is stable)
             res = await nav_tool.execute(url="https://example.com")
@@ -59,7 +64,17 @@ class TestBrowserPlugin(unittest.TestCase):
             assert "Example Domain" in res.output
             print(f"[PASS] Content scraped: {len(res.output)} chars")
             
-            # 4. Screenshot
+            # 4. Scroll down
+            res = await scroll_tool.execute(direction="down", amount=200)
+            assert res.success
+            print(f"[PASS] Scroll: {res.output}")
+            
+            # 5. Scroll to top
+            res = await scroll_tool.execute(direction="top")
+            assert res.success
+            print(f"[PASS] Scroll to top: {res.output}")
+            
+            # 6. Screenshot
             res = await screenshot_tool.execute()
             assert res.success
             print(f"[PASS] Screenshot: {res.output}")
@@ -70,5 +85,61 @@ class TestBrowserPlugin(unittest.TestCase):
 
         self.run_async(run_test())
 
+    def test_tool_count(self):
+        """Verify all 6 browser tools are registered."""
+        plugin = BrowserPlugin()
+        tools = plugin.get_tools()
+        tool_names = [t.name for t in tools]
+        
+        expected = [
+            "browser_navigate", "browser_content", "browser_click",
+            "browser_type", "browser_scroll", "browser_screenshot"
+        ]
+        for name in expected:
+            assert name in tool_names, f"Missing tool: {name}"
+        
+        print(f"[PASS] All 6 browser tools registered: {tool_names}")
+
+
+class TestBrowserToolsUnit(unittest.TestCase):
+    """Unit tests without requiring browser instance."""
+    
+    def test_type_tool_parameters(self):
+        """Test browser_type parameter schema."""
+        from backend.plugins.browser import BrowserTypeTool
+        
+        class FakePlugin:
+            page = None
+        
+        tool = BrowserTypeTool(FakePlugin())
+        params = tool.parameters
+        
+        assert params["properties"]["selector"]["type"] == "string"
+        assert params["properties"]["text"]["type"] == "string"
+        assert params["properties"]["clear"]["type"] == "boolean"
+        assert params["properties"]["press_enter"]["type"] == "boolean"
+        assert "selector" in params["required"]
+        assert "text" in params["required"]
+        
+    def test_scroll_tool_parameters(self):
+        """Test browser_scroll parameter schema."""
+        from backend.plugins.browser import BrowserScrollTool
+        
+        class FakePlugin:
+            page = None
+        
+        tool = BrowserScrollTool(FakePlugin())
+        params = tool.parameters
+        
+        assert params["properties"]["direction"]["type"] == "string"
+        assert "up" in params["properties"]["direction"]["enum"]
+        assert "down" in params["properties"]["direction"]["enum"]
+        assert "top" in params["properties"]["direction"]["enum"]
+        assert "bottom" in params["properties"]["direction"]["enum"]
+        assert params["properties"]["selector"]["type"] == "string"
+        assert params["properties"]["amount"]["type"] == "integer"
+
+
 if __name__ == "__main__":
     unittest.main()
+

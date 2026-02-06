@@ -162,6 +162,59 @@ class LoggingConfig(BaseModel):
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
+class CronConfig(BaseModel):
+    """Cron Scheduling Configuration"""
+    enabled: bool = True
+    store_path: str = "./data/cron/jobs.json"
+
+
+class SessionPersistenceConfig(BaseModel):
+    """Session Persistence Configuration"""
+    persist: bool = True
+    store_path: str = "./data/sessions"
+    auto_save: bool = True
+
+
+class FallbackConfig(BaseModel):
+    """Provider Fallback Configuration"""
+    enabled: bool = True
+    chain: List[str] = ["gemini", "openai", "deepseek"]
+    max_retries: int = 3
+
+
+class CompactionConfig(BaseModel):
+    """Context Compaction Configuration"""
+    enabled: bool = True
+    max_history_tokens: int = 50000
+    summarize_threshold: float = 0.7
+    preserve_recent: int = 10
+
+
+class AuditConfig(BaseModel):
+    """Audit Logging Configuration"""
+    enabled: bool = True
+    store_path: str = "./data/audit"
+    log_tool_calls: bool = True
+    log_provider_calls: bool = True
+
+
+class SearchConfig(BaseModel):
+    """Web Search Configuration"""
+    provider: str = "duckduckgo"
+    brave_api_key: Optional[str] = os.getenv("BRAVE_API_KEY")
+    perplexity_api_key: Optional[str] = os.getenv("PERPLEXITY_API_KEY")
+    serper_api_key: Optional[str] = os.getenv("SERPER_API_KEY")
+    cache_ttl_seconds: int = 3600
+
+
+class FetchConfig(BaseModel):
+    """Web Fetch Configuration"""
+    enabled: bool = True
+    max_chars: int = 50000
+    timeout_seconds: int = 30
+    block_private_ips: bool = True
+
+
 class Config(BaseModel):
     """Main Configuration - loaded from config.yaml"""
     llm: LLMConfig
@@ -174,6 +227,13 @@ class Config(BaseModel):
     plugins: PluginsConfig = PluginsConfig()
     server: ServerConfig
     logging: LoggingConfig
+    cron: CronConfig = CronConfig()
+    session: SessionPersistenceConfig = SessionPersistenceConfig()
+    fallback: FallbackConfig = FallbackConfig()
+    compaction: CompactionConfig = CompactionConfig()
+    audit: AuditConfig = AuditConfig()
+    search: SearchConfig = SearchConfig()
+    fetch: FetchConfig = FetchConfig()
     
     # Paths
     project_root: Path = PROJECT_ROOT

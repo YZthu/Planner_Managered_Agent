@@ -150,6 +150,169 @@ class BrowserScreenshotTool(BrowserBaseTool):
         except Exception as e:
              return ToolResult(success=False, output=f"Failed to take screenshot: {str(e)}")
 
+class BrowserTypeTool(BrowserBaseTool):
+    """Type text into an input element."""
+    
+    @property
+    def name(self) -> str:
+        return "browser_type"
+
+    @property
+    def description(self) -> str:
+        return """Type text into an input field or textarea.
+
+Use this to fill forms, search boxes, or any text input.
+Optionally clear the field first before typing."""
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for the input element (e.g. '#search', 'input[name=q]')."
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The text to type into the input."
+                },
+                "clear": {
+                    "type": "boolean",
+                    "description": "Clear the field before typing (default: true)."
+                },
+                "press_enter": {
+                    "type": "boolean",
+                    "description": "Press Enter after typing (default: false)."
+                }
+            },
+            "required": ["selector", "text"]
+        }
+
+    async def execute(
+        self,
+        selector: str,
+        text: str,
+        clear: bool = True,
+        press_enter: bool = False,
+        **kwargs
+    ) -> ToolResult:
+        err = self._check_available()
+        if err:
+            return err
+
+        try:
+            # Focus the element first
+            element = await self.plugin.page.wait_for_selector(selector, timeout=5000)
+            if not element:
+                return ToolResult(success=False, output=f"Element not found: {selector}")
+            
+            # Clear if requested
+            if clear:
+                await element.fill("")
+            
+            # Type the text
+            await element.type(text, delay=50)  # Small delay for more natural typing
+            
+            # Press Enter if requested
+            if press_enter:
+                await element.press("Enter")
+                return ToolResult(
+                    success=True,
+                    output=f"Typed '{text}' into {selector} and pressed Enter"
+                )
+            
+            return ToolResult(success=True, output=f"Typed '{text}' into {selector}")
+            
+        except Exception as e:
+            return ToolResult(success=False, output=f"Failed to type: {str(e)}")
+
+
+class BrowserScrollTool(BrowserBaseTool):
+    """Scroll the page or an element."""
+    
+    @property
+    def name(self) -> str:
+        return "browser_scroll"
+
+    @property
+    def description(self) -> str:
+        return """Scroll the page up, down, or to a specific element.
+
+Use 'direction' for relative scrolling (up/down/top/bottom).
+Use 'selector' to scroll a specific element into view."""
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "type": "string",
+                    "enum": ["up", "down", "top", "bottom"],
+                    "description": "Scroll direction: up, down, top (page start), bottom (page end)."
+                },
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector to scroll into view (overrides direction)."
+                },
+                "amount": {
+                    "type": "integer",
+                    "description": "Pixels to scroll for up/down (default: 500)."
+                }
+            }
+        }
+
+    async def execute(
+        self,
+        direction: Optional[str] = None,
+        selector: Optional[str] = None,
+        amount: int = 500,
+        **kwargs
+    ) -> ToolResult:
+        err = self._check_available()
+        if err:
+            return err
+
+        try:
+            # Scroll to specific element
+            if selector:
+                element = await self.plugin.page.wait_for_selector(selector, timeout=5000)
+                if not element:
+                    return ToolResult(success=False, output=f"Element not found: {selector}")
+                
+                await element.scroll_into_view_if_needed()
+                return ToolResult(success=True, output=f"Scrolled to element: {selector}")
+            
+            # Directional scrolling
+            if direction == "top":
+                await self.plugin.page.evaluate("window.scrollTo(0, 0)")
+                return ToolResult(success=True, output="Scrolled to top of page")
+            
+            elif direction == "bottom":
+                await self.plugin.page.evaluate(
+                    "window.scrollTo(0, document.body.scrollHeight)"
+                )
+                return ToolResult(success=True, output="Scrolled to bottom of page")
+            
+            elif direction == "up":
+                await self.plugin.page.evaluate(f"window.scrollBy(0, -{amount})")
+                return ToolResult(success=True, output=f"Scrolled up {amount}px")
+            
+            elif direction == "down":
+                await self.plugin.page.evaluate(f"window.scrollBy(0, {amount})")
+                return ToolResult(success=True, output=f"Scrolled down {amount}px")
+            
+            else:
+                return ToolResult(
+                    success=False,
+                    output="Specify either 'direction' (up/down/top/bottom) or 'selector'"
+                )
+                
+        except Exception as e:
+            return ToolResult(success=False, output=f"Failed to scroll: {str(e)}")
+
+
 class BrowserPlugin(BasePlugin):
     playwright: Optional[Playwright] = None
     browser: Optional[Browser] = None
@@ -207,5 +370,7 @@ class BrowserPlugin(BasePlugin):
             BrowserNavigateTool(self),
             BrowserContentTool(self),
             BrowserClickTool(self),
+            BrowserTypeTool(self),
+            BrowserScrollTool(self),
             BrowserScreenshotTool(self)
         ]
