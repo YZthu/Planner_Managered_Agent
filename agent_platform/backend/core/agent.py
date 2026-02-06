@@ -17,52 +17,11 @@ from ..tools.base import BaseTool, ToolResult
 from ..tools.spawn_subagent import SpawnSubAgentTool
 from ..tools.web_search import WebSearchTool
 from ..config import config
-
-
-# Default system prompt for the main agent
-DEFAULT_SYSTEM_PROMPT = """You are a powerful AI assistant with the ability to spawn subagents for parallel work.
-
-## Core Capabilities
-1. **Direct Response**: Answer questions directly when appropriate
-2. **Web Search**: Use the web_search tool to find current information
-3. **Task Delegation**: Use spawn_subagent to delegate subtasks for parallel processing
-
-## Guidelines
-- For complex tasks, break them down and spawn subagents for parallel execution
-- Each subagent works independently on its assigned task
-- Subagent results are automatically reported back to you
-- Synthesize subagent results into a coherent response for the user
-
-## When to Spawn Subagents
-- Research tasks that can be parallelized (e.g., searching different topics)
-- Multi-step tasks where steps can run concurrently
-- Tasks requiring different types of analysis
-
-## When NOT to Spawn Subagents
-- Simple questions you can answer directly
-- Tasks that must be sequential
-- Single-focus tasks better handled directly
-
-45. **Thinking Process**: You have a "thinking" capability. Use it to plan complex tasks before acting. Wrap your thoughts in <thought> tags.
-46. 
-47. Be helpful, thorough, and efficient. Leverage subagents to maximize productivity."""
-
-
-# Subagent system prompt
-SUBAGENT_SYSTEM_PROMPT = """You are a focused subagent spawned to complete a specific task.
-
-## Your Role
-- Complete ONLY the assigned task
-- Be thorough but concise in your response
-- Your entire response will be reported back to the main agent
-
-## Rules
-1. Stay focused on your specific task
-2. Do not try to spawn other subagents
-3. Do not ask questions - work with what you have
-4. Provide a complete, self-contained response
-
-Complete your task now."""
+from ..prompts import (
+    DEFAULT_SYSTEM_PROMPT,
+    DEEP_RESEARCH_SYSTEM_PROMPT,
+    SUBAGENT_SYSTEM_PROMPT
+)
 
 
 class AgentExecutor:
@@ -76,14 +35,18 @@ class AgentExecutor:
         tools: Optional[List[BaseTool]] = None,
         system_prompt: Optional[str] = None,
         is_subagent: bool = False,
-        session_id: str = "default"
+        session_id: str = "default",
+        role: str = None
     ):
         self.provider = provider or self._create_default_provider()
-        self.system_prompt = system_prompt or (
-            SUBAGENT_SYSTEM_PROMPT if is_subagent else DEFAULT_SYSTEM_PROMPT
+        # Load default system prompt from config
+        self.system_prompt = system_prompt or self._load_system_prompt(
+            "subagent" if is_subagent else "default"
         )
         self.is_subagent = is_subagent
         self.session_id = session_id
+        # Default role from config if not provided
+        self.role = role or config.security.default_role
         
         # Setup tools
         if tools is None:
@@ -97,6 +60,47 @@ class AgentExecutor:
         self._message_history: List[Message] = []
         self._on_event: Optional[Callable] = None
     
+    def _load_system_prompt(self, persona_name: str) -> str:
+        """Load system prompt from backend.personas module"""
+        from ..personas import get_persona_prompt
+        return get_persona_prompt(persona_name)
+
+    def set_persona(self, persona: str) -> bool:
+        """
+        Set the agent's persona (system prompt).
+        
+        Validates that the persona's requirements are satisfied before switching.
+        Falls back to 'default' persona if requirements are not met.
+        
+        Args:
+            persona: Name of the persona to switch to.
+        
+        Returns:
+            True if the requested persona was set, False if fell back to default.
+        """
+        from ..personas import validate_persona_with_registry
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Validate persona requirements
+        result = validate_persona_with_registry(persona)
+        
+        if result.eligible:
+            self.system_prompt = self._load_system_prompt(persona)
+            return True
+        else:
+            # Log warning and fallback to default
+            logger.warning(
+                f"Persona '{persona}' requirements not satisfied. "
+                f"Missing plugins: {result.missing_plugins}, "
+                f"Missing core_tools: {result.missing_core_tools}, "
+                f"Missing plugin_tools: {result.missing_plugin_tools}. "
+                f"Falling back to 'default' persona."
+            )
+            self.system_prompt = self._load_system_prompt("default")
+            return False
+            
     def _create_default_provider(self, provider_name: str = None) -> BaseLLMProvider:
         """Create LLM provider based on name or config"""
         provider = provider_name or config.llm.default_provider
@@ -168,6 +172,9 @@ class AgentExecutor:
         """
         # Add user message to history
         self._message_history.append(Message(role=Role.USER, content=user_message))
+        
+        # Trigger on_agent_start hook
+        await plugin_registry.trigger_hook("on_agent_start", user_message=user_message, session_id=self.session_id)
         
         # Context Windowing: Keep only the last N messages
         if len(self._message_history) > config.agent.max_history_messages:
@@ -248,6 +255,13 @@ class AgentExecutor:
         
         await self._emit_event("complete", {"response": final_response})
         
+        # Trigger on_agent_finish hook
+        await plugin_registry.trigger_hook("on_agent_finish", 
+            response=final_response, 
+            history=self._message_history, 
+            session_id=self.session_id
+        )
+        
         return final_response
     
     async def _execute_tool(self, name: str, arguments: Dict[str, Any]) -> ToolResult:
@@ -259,6 +273,17 @@ class AgentExecutor:
                 output=f"Unknown tool: {name}"
             )
         
+        # Check Permissions
+        from ..security.access_control import access_control
+        if not access_control.check_permission(self.role, name):
+            return ToolResult(
+                success=False,
+                output=f"Permission Denied: Role '{self.role}' cannot use tool '{name}'"
+            )
+
+        # Trigger on_tool_start
+        await plugin_registry.trigger_hook("on_tool_start", name=name, arguments=arguments, session_id=self.session_id)
+        
         try:
             try:
                 # Add session_id for spawn_subagent
@@ -266,16 +291,24 @@ class AgentExecutor:
                     arguments["session_id"] = self.session_id
                 
                 # Robust execution with timeout
-                return await asyncio.wait_for(
+                result = await asyncio.wait_for(
                     tool.execute(**arguments),
                     timeout=config.agent.subagent_timeout_seconds
                 )
+                
+                # Trigger on_tool_end (success)
+                await plugin_registry.trigger_hook("on_tool_end", name=name, result=result, session_id=self.session_id)
+                
+                return result
             except asyncio.TimeoutError:
                 return ToolResult(
                     success=False,
                     output=f"Tool execution timed out after {config.agent.subagent_timeout_seconds}s"
                 )
         except Exception as e:
+            # Trigger on_error
+            await plugin_registry.trigger_hook("on_error", error=e, context=f"tool:{name}", session_id=self.session_id)
+            
             return ToolResult(
                 success=False,
                 output=f"Tool execution error: {str(e)}"

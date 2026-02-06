@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 
 from backend.api.routes import router
 from backend.core.registry import registry
+from backend.core.startup import initialize_plugins, validate_enabled_personas
 from backend.config import config
 
 
@@ -25,6 +26,19 @@ async def lifespan(app: FastAPI):
     print(f"✅ Registry initialized at {registry.db_path}")
     print(f"📡 LLM Provider: {config.llm.default_provider}")
     print(f"🔧 Max concurrent subagents: {config.agent.max_concurrent_subagents}")
+    
+    # Initialize plugins
+    await initialize_plugins()
+    print(f"🔌 Plugins initialized: {config.plugins.enabled}")
+    
+    # Validate personas
+    print(f"🎭 Validating enabled personas: {config.personas.enabled}")
+    persona_status = validate_enabled_personas()
+    for persona, eligible in persona_status.items():
+        if eligible:
+            print(f"  ✅ {persona}: eligible")
+        else:
+            print(f"  ⚠️  {persona}: NOT eligible")
     
     yield
     

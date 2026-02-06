@@ -21,6 +21,11 @@ class BasePlugin(ABC):
         """Unique plugin name"""
         pass
 
+    @property
+    def hooks(self) -> Dict[str, Any]:
+        """Dictionary of event name to handler method"""
+        return {}
+
     def get_tools(self) -> List[BaseTool]:
         """Return list of tools provided by this plugin"""
         return []
@@ -40,7 +45,28 @@ class PluginRegistry:
     """
     def __init__(self):
         self._plugins: Dict[str, BasePlugin] = {}
+        self._hooks: Dict[str, List[Any]] = {}
         self._loaded = False
+
+    def register_hook(self, event: str, handler: Any):
+        """Register a hook handler"""
+        if event not in self._hooks:
+            self._hooks[event] = []
+        self._hooks[event].append(handler)
+        logger.debug(f"Registered hook for {event}")
+
+    async def trigger_hook(self, event: str, **kwargs):
+        """Trigger all handlers for an event"""
+        if event in self._hooks:
+            for handler in self._hooks[event]:
+                try:
+                    import inspect
+                    if inspect.iscoroutinefunction(handler):
+                        await handler(**kwargs)
+                    else:
+                        handler(**kwargs)
+                except Exception as e:
+                    logger.error(f"Error in hook {event}: {e}")
 
     def register_plugin(self, plugin: BasePlugin):
         """Register a plugin instance"""
@@ -59,6 +85,11 @@ class PluginRegistry:
                 
             try:
                 await plugin.on_load()
+                
+                # Register hooks
+                for event, handler in plugin.hooks.items():
+                    self.register_hook(event, handler)
+                    
                 plugin._initialized = True
                 logger.info(f"Initialized plugin: {name}")
             except Exception as e:
@@ -72,6 +103,10 @@ class PluginRegistry:
         for plugin in self._plugins.values():
             tools.extend(plugin.get_tools())
         return tools
+
+    def get_available_tool_names(self) -> List[str]:
+        """Get names of all available tools from loaded plugins."""
+        return [tool.name for tool in self.get_all_tools()]
 
     def get_plugin(self, name: str) -> Optional[BasePlugin]:
         return self._plugins.get(name)

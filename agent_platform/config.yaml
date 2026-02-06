@@ -56,6 +56,55 @@ agent:
   
   # Message debounce time in milliseconds (combine rapid messages)
   debounce_ms: 1000
+  collection_name: "agent_memory"
+  persist_directory: "./data/memory"
+
+  persist_directory: "./data/memory"
+
+# Personas Configuration
+# Persona files are stored in backend/personas/*.py
+# Each persona defines a SYSTEM_PROMPT for agent behavior.
+personas:
+  enabled:
+    - "default"         # General-purpose assistant for everyday tasks
+    - "deep_research"   # Iterative web research with browser + search tools
+    - "subagent"        # Focused single-task execution for spawned agents
+    - "coder"           # Software engineering with precision and best practices
+    - "memory_manager"  # Knowledge base admin for RAG storage and retrieval
+    # - "network_admin" # Infrastructure monitoring (mDNS, connectivity)
+    # - "recruiter"     # Talent sourcing and professional research
+
+# Plugins Configuration
+# Each plugin provides a set of tools for the agent.
+plugins:
+  enabled:
+    - "core"      # Essential tools: web_search, spawn_subagent
+    - "memory"    # Long-term memory: add_memory, query_memory (ChromaDB)
+    - "browser"   # Web browsing: navigate, click, content, screenshot (Playwright)
+    - "network"   # Network discovery: get_network_status, mDNS (zeroconf)
+
+browser:
+  headless: true
+  user_agent: "AgentPlatform/1.0"
+  viewport: { width: 1280, height: 720 }
+
+network:
+  enable_mdns: true
+  hostname: "agent-platform"
+  service_type: "_agent-platform._tcp.local."
+
+security:
+  enabled: true
+  default_role: "user"
+  roles:
+    admin:
+      allow: ["*"]
+    user:
+      allow: ["*"]
+      deny: ["shell_execute", "file_delete"]
+    guest:
+      allow: ["web_search", "browser_content", "query_memory"]
+      deny: ["*"]
 
 # Paths (relative to agent_platform directory)
 paths:

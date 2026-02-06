@@ -99,14 +99,54 @@ class LLMConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     """Agent Configuration"""
-    max_concurrent_subagents: int
-    subagent_timeout_seconds: int
-    max_concurrent_subagents: int
-    subagent_timeout_seconds: int
-    max_tool_calls_per_turn: int
-    max_history_messages: int = 20
-    enable_thinking: bool = True
+    max_concurrent_subagents: int = 4
+    max_tool_calls_per_turn: int = 10
+    max_history_messages: int = 10
+    enable_thinking: bool = False
+    subagent_timeout_seconds: int = 60
     debounce_ms: int = 1000
+
+
+class MemoryConfig(BaseModel):
+    enabled: bool = False
+    collection_name: str = "agent_memory"
+    persist_directory: str = "./data/memory"
+
+
+class BrowserConfig(BaseModel):
+    headless: bool = True
+    user_agent: str = "AgentPlatform/1.0"
+    viewport: Dict[str, int] = {"width": 1280, "height": 720}
+
+
+class NetworkConfig(BaseModel):
+    enable_mdns: bool = True
+    hostname: str = "agent-platform"
+    service_type: str = "_agent-platform._tcp.local."
+
+
+class RoleConfig(BaseModel):
+    allow: List[str] = []
+    deny: List[str] = []
+
+class SecurityConfig(BaseModel):
+    enabled: bool = False
+    default_role: str = "user"
+    roles: Dict[str, RoleConfig] = {
+        "admin": RoleConfig(allow=["*"]),
+        "user": RoleConfig(allow=["*"], deny=["shell_execute", "file_delete"]),
+        "guest": RoleConfig(allow=["web_search", "browser_content", "query_memory"], deny=["*"])
+    }
+
+
+class PersonasConfig(BaseModel):
+    """Personas Configuration"""
+    enabled: List[str] = ["default"]
+
+
+class PluginsConfig(BaseModel):
+    """Plugins Configuration"""
+    enabled: List[str] = ["core"]
 
 
 class ServerConfig(BaseModel):
@@ -126,6 +166,12 @@ class Config(BaseModel):
     """Main Configuration - loaded from config.yaml"""
     llm: LLMConfig
     agent: AgentConfig
+    memory: MemoryConfig = MemoryConfig()
+    browser: BrowserConfig = BrowserConfig()
+    network: NetworkConfig = NetworkConfig()
+    security: SecurityConfig = SecurityConfig()
+    personas: PersonasConfig = PersonasConfig()
+    plugins: PluginsConfig = PluginsConfig()
     server: ServerConfig
     logging: LoggingConfig
     
@@ -181,9 +227,23 @@ def create_config_from_yaml(yaml_data: Dict[str, Any]) -> Config:
     skills_dir = PLATFORM_ROOT / paths_data.get("skills_dir", "skills")
     data_dir = PLATFORM_ROOT / paths_data.get("data_dir", "data")
     
+    # Build personas config
+    personas_data = yaml_data.get("personas", {})
+    personas_config = PersonasConfig(
+        enabled=personas_data.get("enabled", ["default"])
+    )
+    
+    # Build plugins config
+    plugins_data = yaml_data.get("plugins", {})
+    plugins_config = PluginsConfig(
+        enabled=plugins_data.get("enabled", ["core"])
+    )
+    
     return Config(
         llm=llm_config,
         agent=agent_config,
+        personas=personas_config,
+        plugins=plugins_config,
         server=server_config,
         logging=logging_config,
         skills_dir=skills_dir,

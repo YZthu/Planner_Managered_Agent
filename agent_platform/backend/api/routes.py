@@ -144,9 +144,31 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await registry.initialize()
     
     # Initialize Plugins
+    # Initialize Plugins based on configuration
     from ..core.plugins import plugin_registry
     from ..plugins.core import CorePlugin
-    plugin_registry.register_plugin(CorePlugin())
+    from ..plugins.memory import MemoryPlugin
+    from ..plugins.browser import BrowserPlugin
+    from ..plugins.network import NetworkPlugin
+    
+    # Map plugin names to classes
+    plugin_map = {
+        "core": CorePlugin,
+        "memory": MemoryPlugin,
+        "browser": BrowserPlugin,
+        "network": NetworkPlugin
+    }
+    
+    # Get enabled plugins from config, default to all if not specified
+    enabled_plugins = getattr(config, "plugins", {}).get("enabled", list(plugin_map.keys()))
+    
+    for plugin_name in enabled_plugins:
+        plugin_class = plugin_map.get(plugin_name)
+        if plugin_class:
+            plugin_registry.register_plugin(plugin_class())
+        else:
+            print(f"Warning: Unknown plugin '{plugin_name}' in configuration")
+    
     await plugin_registry.initialize()
     
     # Register Event Handler for this session to emit JSON-RPC notifications
