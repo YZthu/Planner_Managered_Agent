@@ -114,8 +114,8 @@ The subagent's result will be automatically sent back to you when complete."""
                     error=str(e)
                 )
             
-            # Enqueue the subagent
-            asyncio.create_task(subagent_queue.enqueue(run.run_id, run_subagent))
+        # Enqueue the subagent
+        asyncio.create_task(subagent_queue.enqueue(run.run_id, run_subagent))
         
         return ToolResult(
             success=True,

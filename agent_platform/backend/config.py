@@ -160,6 +160,11 @@ class LoggingConfig(BaseModel):
     """Logging Configuration"""
     level: str = "INFO"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    timezone: str = "UTC"
+    log_dir: str = "./logs"
+    max_days: int = 7
+    json_format: bool = True
+    console_colors: bool = True
 
 
 class CronConfig(BaseModel):
@@ -280,6 +285,11 @@ def create_config_from_yaml(yaml_data: Dict[str, Any]) -> Config:
     logging_config = LoggingConfig(
         level=logging_data.get("level", "INFO"),
         format=logging_data.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
+        timezone=logging_data.get("timezone", "UTC"),
+        log_dir=logging_data.get("log_dir", "./logs"),
+        max_days=logging_data.get("max_days", 7),
+        json_format=logging_data.get("json_format", True),
+        console_colors=logging_data.get("console_colors", True),
     )
     
     # Build paths

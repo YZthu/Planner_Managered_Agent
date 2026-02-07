@@ -80,8 +80,27 @@ plugins:
   enabled:
     - "core"      # Essential tools: web_search, spawn_subagent
     - "memory"    # Long-term memory: add_memory, query_memory (ChromaDB)
-    - "browser"   # Web browsing: navigate, content, click, type, scroll, screenshot (Playwright)
+    - "browser"   # Web browsing: 10 tools including navigate, type, scroll, snapshot, tabs, pdf (Playwright)
     - "network"   # Network discovery: get_network_status, mDNS (zeroconf)
+
+# Logging Configuration
+logging:
+  level: "INFO"           # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  timezone: "America/Los_Angeles" # Timezone for logs
+  log_dir: "./logs"       # Directory for log files
+  max_days: 7             # Days to keep rotated logs
+  json_format: true       # Use JSON format for file logs
+  console_colors: true    # Colored console output
+
+# Agent Trace Configuration (for debugging and analysis)
+agent_trace:
+  enabled: true
+  trace_dir: "./traces"     # Directory for trace files
+  sample_rate: 1.0          # 1.0 = 100%, 0.1 = 10% sampling
+  include_messages: true    # Log full message content
+  include_thinking: true    # Log thinking/reasoning
+  max_content_length: 10000 # Truncate long content
 
 browser:
   headless: true
@@ -111,7 +130,4 @@ paths:
   skills_dir: "skills"
   data_dir: "data"
 
-# Logging
-logging:
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+

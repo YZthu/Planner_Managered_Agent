@@ -4,12 +4,14 @@ Main agent loop that processes messages and executes tools.
 Implements the LLM-as-Planner pattern.
 """
 import asyncio
+import time
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
 
 from .registry import registry, SubAgentRun, RunStatus
 from .queue import subagent_queue
 from .plugins import plugin_registry
+from .agent_trace import create_session, configure_tracer
 from ..providers.base import BaseLLMProvider, Message, Role, ToolDefinition, LLMResponse
 from ..providers.gemini import GeminiProvider
 from ..providers import create_deepseek_provider, create_openai_provider
@@ -19,9 +21,9 @@ from ..tools.web_search import WebSearchTool
 from ..config import config
 from ..prompts import (
     DEFAULT_SYSTEM_PROMPT,
-    DEEP_RESEARCH_SYSTEM_PROMPT,
     SUBAGENT_SYSTEM_PROMPT
 )
+from backend.core.logging import agent_logger
 
 
 class AgentExecutor:
@@ -59,6 +61,14 @@ class AgentExecutor:
         self.tools = {tool.name: tool for tool in tools}
         self._message_history: List[Message] = []
         self._on_event: Optional[Callable] = None
+        
+        # Initialize trace session
+        self._trace_session = create_session(
+            session_id=session_id,
+            metadata={"is_subagent": is_subagent, "role": self.role}
+        )
+        self._session_started = False
+        self.logger = agent_logger()
     
     def _load_system_prompt(self, persona_name: str) -> str:
         """Load system prompt from backend.personas module"""
@@ -173,6 +183,14 @@ class AgentExecutor:
         # Add user message to history
         self._message_history.append(Message(role=Role.USER, content=user_message))
         
+        # Start trace session on first turn
+        if not self._session_started:
+            self._trace_session.start_session(metadata={"provider": self.provider.__class__.__name__})
+            self._session_started = True
+        
+        # Start turn tracing
+        self._trace_session.start_turn(user_message)
+        
         # Trigger on_agent_start hook
         await plugin_registry.trigger_hook("on_agent_start", user_message=user_message, session_id=self.session_id)
         
@@ -188,16 +206,36 @@ class AgentExecutor:
         
         await self._emit_event("thinking", {"status": "Processing your message..."})
         
+        self.logger.info(f"Session {self.session_id} - Processing message: {user_message[:200]}...")
+        
         iteration = 0
         final_response = ""
         
         while iteration < max_iterations:
             iteration += 1
             
+            # Trace LLM request
+            tool_names = [t.name for t in self.tools.values()] if self.tools else None
+            self._trace_session.log_llm_request(
+                model=self.provider.__class__.__name__,
+                messages=[{"role": m.role.value, "content": m.content[:500] if m.content else ""} for m in messages[-5:]],
+                tools=tool_names
+            )
+            
             # Call LLM
+            llm_start = time.time()
             response = await self.provider.generate(
                 messages=messages,
                 tools=self.get_tool_definitions() if self.tools else None
+            )
+            llm_duration = (time.time() - llm_start) * 1000
+            
+            # Trace LLM response
+            self._trace_session.log_llm_response(
+                model=self.provider.__class__.__name__,
+                content=response.content or "",
+                tool_calls=[{"name": tc.name, "args": tc.arguments} for tc in response.tool_calls] if response.tool_calls else None,
+                duration_ms=llm_duration
             )
 
             # Thinking Steps Extraction
@@ -233,6 +271,8 @@ class AgentExecutor:
                         "result": result.output[:500]  # Truncate for display
                     })
                     
+                    self.logger.info(f"Tool '{tool_call.name}' executed. Success: {result.success}")
+                    
                     # Add tool result to messages
                     messages.append(Message(
                         role=Role.TOOL,
@@ -253,6 +293,9 @@ class AgentExecutor:
                 content=final_response
             ))
         
+        # End turn tracing
+        self._trace_session.end_turn(final_response)
+        
         await self._emit_event("complete", {"response": final_response})
         
         # Trigger on_agent_finish hook
@@ -261,6 +304,8 @@ class AgentExecutor:
             history=self._message_history, 
             session_id=self.session_id
         )
+        
+        self.logger.info(f"Session {self.session_id} - Finished. Response: {final_response[:200]}...")
         
         return final_response
     
@@ -290,14 +335,29 @@ class AgentExecutor:
                 if name == "spawn_subagent":
                     arguments["session_id"] = self.session_id
                 
+                # Trace tool call
+                self._trace_session.log_tool_call(name, arguments)
+                tool_start = time.time()
+                
                 # Robust execution with timeout
                 result = await asyncio.wait_for(
                     tool.execute(**arguments),
                     timeout=config.agent.subagent_timeout_seconds
                 )
+                tool_duration = (time.time() - tool_start) * 1000
+                
+                # Trace tool result
+                self._trace_session.log_tool_result(
+                    tool_name=name,
+                    success=result.success,
+                    result=result.output[:1000] if result.output else None,
+                    duration_ms=tool_duration
+                )
                 
                 # Trigger on_tool_end (success)
                 await plugin_registry.trigger_hook("on_tool_end", name=name, result=result, session_id=self.session_id)
+                
+                self.logger.info(f"Tool '{name}' completed successfully ({tool_duration:.2f}ms)")
                 
                 return result
             except asyncio.TimeoutError:
@@ -306,6 +366,13 @@ class AgentExecutor:
                     output=f"Tool execution timed out after {config.agent.subagent_timeout_seconds}s"
                 )
         except Exception as e:
+            # Trace tool error
+            self._trace_session.log_tool_result(
+                tool_name=name,
+                success=False,
+                error=str(e)
+            )
+            
             # Trigger on_error
             await plugin_registry.trigger_hook("on_error", error=e, context=f"tool:{name}", session_id=self.session_id)
             
@@ -325,6 +392,12 @@ class AgentExecutor:
         Returns:
             The subagent's response
         """
+        # Start trace turn (use registry run_id in metadata)
+        self._trace_session.start_turn(
+            user_input=task,
+            metadata={"subagent_run_id": run_id}
+        )
+        
         # Simple single-turn execution for subagent
         messages = [
             Message(role=Role.SYSTEM, content=self.system_prompt),
@@ -332,10 +405,22 @@ class AgentExecutor:
         ]
         
         # Allow web search for subagents
+        # Note: If we wanted to use other tools, we'd need to configure them here
         tools = [WebSearchTool()]
         
         max_iterations = 5
+        final_result = "Task completed (max iterations reached)."
+        
         for _ in range(max_iterations):
+            # Trace LLM request
+            self._trace_session.log_llm_request(
+                model=self.provider.__class__.__name__,
+                messages=[{"role": m.role.value, "content": m.content[:500] if m.content else ""} for m in messages[-3:]],
+                tools=[t.name for t in tools]
+            )
+            
+            # Call LLM
+            llm_start = time.time()
             response = await self.provider.generate(
                 messages=messages,
                 tools=[ToolDefinition(
@@ -343,6 +428,15 @@ class AgentExecutor:
                     description=t.description,
                     parameters=t.parameters
                 ) for t in tools]
+            )
+            llm_duration = (time.time() - llm_start) * 1000
+            
+            # Trace LLM response
+            self._trace_session.log_llm_response(
+                model=self.provider.__class__.__name__,
+                content=response.content or "",
+                tool_calls=[{"name": tc.name, "args": tc.arguments} for tc in response.tool_calls] if response.tool_calls else None,
+                duration_ms=llm_duration
             )
             
             if response.tool_calls:
@@ -354,17 +448,50 @@ class AgentExecutor:
                 for tc in response.tool_calls:
                     tool = next((t for t in tools if t.name == tc.name), None)
                     if tool:
-                        result = await tool.execute(**tc.arguments)
-                        messages.append(Message(
-                            role=Role.TOOL,
-                            content=result.output,
-                            tool_call_id=tc.id,
-                            name=tc.name
-                        ))
+                        # Trace tool call
+                        self._trace_session.log_tool_call(tc.name, tc.arguments)
+                        tool_start = time.time()
+                        
+                        try:
+                            # Execute tool
+                            result = await tool.execute(**tc.arguments)
+                            tool_duration = (time.time() - tool_start) * 1000
+                            
+                            # Trace tool result
+                            self._trace_session.log_tool_result(
+                                tool_name=tc.name,
+                                success=result.success,
+                                result=result.output[:1000] if result.output else None,
+                                duration_ms=tool_duration
+                            )
+                            
+                            messages.append(Message(
+                                role=Role.TOOL,
+                                content=result.output,
+                                tool_call_id=tc.id,
+                                name=tc.name
+                            ))
+                        except Exception as e:
+                            # Trace tool error
+                            self._trace_session.log_tool_result(
+                                tool_name=tc.name,
+                                success=False,
+                                error=str(e)
+                            )
+                            messages.append(Message(
+                                role=Role.TOOL,
+                                content=f"Error: {str(e)}",
+                                tool_call_id=tc.id,
+                                name=tc.name
+                            ))
             else:
-                return response.content or "Task completed but no response generated."
+                final_result = response.content or "Task completed but no response generated."
+                break
         
-        return "Task completed (max iterations reached)."
+        # End trace turn
+        self._trace_session.end_turn(final_result)
+        
+        return final_result
     
     def clear_history(self):
         """Clear conversation history"""

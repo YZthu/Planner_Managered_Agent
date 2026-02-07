@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from .websocket import websocket_manager
 from .websocket import websocket_manager
+from ..core.registry import registry
 from ..core.session import session_manager
 from ..core.agent import get_subagent_status
 from ..core.queue import subagent_queue
@@ -159,8 +160,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         "network": NetworkPlugin
     }
     
-    # Get enabled plugins from config, default to all if not specified
-    enabled_plugins = getattr(config, "plugins", {}).get("enabled", list(plugin_map.keys()))
+    # Get enabled plugins from config
+    enabled_plugins = config.plugins.enabled
     
     for plugin_name in enabled_plugins:
         plugin_class = plugin_map.get(plugin_name)

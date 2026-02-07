@@ -39,6 +39,17 @@ python main.py
 
 Navigate to `http://localhost:8000` in your browser.
 
+### 5. Monitor Logs and Traces (Optional)
+
+See [Observability Guide](docs/OBSERVABILITY.md) for details on simplified logging (`agent.log`), deep tracing (`traces/`), and timezone configuration.
+
+### 6. CLI Chat Interface (Optional)
+
+For faster backend testing, bypass the UI with the CLI chat tool:
+```bash
+python cli_chat.py
+```
+
 ## Architecture
 
 ```

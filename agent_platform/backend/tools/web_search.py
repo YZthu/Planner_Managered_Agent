@@ -202,20 +202,51 @@ async def search_serper(
 
 async def search_duckduckgo(query: str, count: int = 5) -> List[Dict[str, str]]:
     """Search using DuckDuckGo (no API key required)."""
+    results = []
+    
+    # Method 1: duckduckgo_search library (Scraper)
+    # Try default backend first, then 'lite'
     try:
         from duckduckgo_search import DDGS
+        import warnings
         
-        results = []
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=count):
-                results.append({
-                    "title": r.get("title", ""),
-                    "snippet": r.get("body", ""),
-                    "url": r.get("href", "")
-                })
-        return results
-    except ImportError:
-        # Fallback to HTTP API
+        # Define backends to try
+        backends = [None, "lite"]
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with DDGS() as ddgs:
+                for backend in backends:
+                    try:
+                        kwargs = {"max_results": count}
+                        if backend:
+                            kwargs["backend"] = backend
+                            
+                        gen = ddgs.text(query, **kwargs)
+                        if gen:
+                            for r in gen:
+                                results.append({
+                                    "title": r.get("title", ""),
+                                    "snippet": r.get("body", ""),
+                                    "url": r.get("href", "")
+                                })
+                            
+                        if results:
+                            break
+                    except Exception as inner_e:
+                        logger.debug(f"DDGS backend '{backend}' failed: {inner_e}")
+                        continue
+        
+        if results:
+            return results
+            
+    except Exception as e:
+        logger.warning(f"duckduckgo_search failed: {e}")
+        # Fall through to fallback
+    
+    # Method 2: HTTP API (Fallback)
+    # Note: The Instant Answer API is limited and often returns no 'Abstract' for general queries.
+    try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 "https://api.duckduckgo.com/",
@@ -227,10 +258,19 @@ async def search_duckduckgo(query: str, count: int = 5) -> List[Dict[str, str]]:
                 timeout=10.0
             )
             
-            if response.status_code != 200:
+            # Allow 200 and 202
+            if response.status_code not in [200, 202]:
                 return []
             
-            data = response.json()
+            # If 202, it might still have body, or might be empty. 
+            # Often 202 from DDG API means "no answer" or "processing".
+            # We'll try to parse it anyway.
+            
+            try:
+                data = response.json()
+            except Exception:
+                return []
+
             results = []
             
             if data.get("Abstract"):
@@ -240,7 +280,7 @@ async def search_duckduckgo(query: str, count: int = 5) -> List[Dict[str, str]]:
                     "url": data.get("AbstractURL", "")
                 })
             
-            for topic in data.get("RelatedTopics", [])[:count-1]:
+            for topic in data.get("RelatedTopics", [])[:count]:
                 if isinstance(topic, dict) and "Text" in topic:
                     results.append({
                         "title": topic.get("Text", "")[:100],
@@ -249,6 +289,10 @@ async def search_duckduckgo(query: str, count: int = 5) -> List[Dict[str, str]]:
                     })
             
             return results[:count]
+            
+    except Exception as e:
+        logger.warning(f"DuckDuckGo API fallback failed: {e}")
+        return []
 
 
 class WebSearchTool(BaseTool):

@@ -213,26 +213,25 @@ class TestWebSearchProviders:
         assert formatted.data["provider"] == "perplexity"
 
 
-class TestDuckDuckGoSearch:
-    """Test DuckDuckGo search (fallback)."""
-    
+    @pytest.mark.live
     @pytest.mark.asyncio
-    async def test_duckduckgo_search(self):
-        """Test DuckDuckGo search execution."""
+    async def test_duckduckgo_search_live(self):
+        """
+        Live integration test for DuckDuckGo search.
+        Strictly asserts that results are returned. Fails on network/parsing errors.
+        """
         from backend.tools.web_search import search_duckduckgo
         
-        # This may make a real HTTP request if duckduckgo_search is not installed
-        try:
-            results = await search_duckduckgo("python programming", count=3)
-            
-            # Should return a list
-            assert isinstance(results, list)
-            
-            # If results were returned, check structure
-            if results:
-                assert "title" in results[0]
-                assert "snippet" in results[0]
-                assert "url" in results[0]
-        except Exception:
-            # Network issues are okay in tests
-            pass
+        # This will fail if network is down or library is broken
+        results = await search_duckduckgo("python programming", count=3)
+        
+        assert isinstance(results, list)
+        assert len(results) > 0, "Live search returned no results!"
+        
+        # Verify structure of first result
+        first = results[0]
+        assert "title" in first
+        assert "snippet" in first
+        assert "url" in first
+        assert len(first["title"]) > 0
+        assert len(first["url"]) > 0

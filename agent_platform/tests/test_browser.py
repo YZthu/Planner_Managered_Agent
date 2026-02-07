@@ -86,19 +86,20 @@ class TestBrowserPlugin(unittest.TestCase):
         self.run_async(run_test())
 
     def test_tool_count(self):
-        """Verify all 6 browser tools are registered."""
+        """Verify all 10 browser tools are registered."""
         plugin = BrowserPlugin()
         tools = plugin.get_tools()
         tool_names = [t.name for t in tools]
         
         expected = [
             "browser_navigate", "browser_content", "browser_click",
-            "browser_type", "browser_scroll", "browser_screenshot"
+            "browser_type", "browser_scroll", "browser_snapshot",
+            "browser_tabs", "browser_console", "browser_pdf", "browser_screenshot"
         ]
         for name in expected:
             assert name in tool_names, f"Missing tool: {name}"
         
-        print(f"[PASS] All 6 browser tools registered: {tool_names}")
+        print(f"[PASS] All 10 browser tools registered: {tool_names}")
 
 
 class TestBrowserToolsUnit(unittest.TestCase):

@@ -16,11 +16,26 @@ from backend.core.registry import registry
 from backend.core.startup import initialize_plugins, validate_enabled_personas
 from backend.config import config
 
+from backend.core.logging import configure_logging
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
+    # Configure logging
+    # Configure logging
+    configure_logging(
+        log_dir=config.logging.log_dir,
+        log_level=config.logging.level,
+        max_days=config.logging.max_days,
+        json_format=config.logging.json_format,
+        console_colors=config.logging.console_colors,
+        timezone=config.logging.timezone
+    )
+    
     # Startup
+    from backend.core.logging import get_logger
+    get_logger("startup").info("✅ Logging system verified and active")
+    
     print("🚀 Starting Agent Platform...")
     await registry.initialize()
     print(f"✅ Registry initialized at {registry.db_path}")

@@ -177,7 +177,7 @@ provider = create_deepseek_provider()  # Uses config from YAML
 | :--- | :--- | :--- |
 | **CorePlugin** | `web_search`, `web_fetch`, `spawn_subagent` | None |
 | **MemoryPlugin** | `add_memory`, `query_memory` | ChromaDB |
-| **BrowserPlugin** | `browser_navigate`, `browser_content`, `browser_click`, `browser_type`, `browser_scroll`, `browser_screenshot` | Playwright |
+| **BrowserPlugin** | `browser_navigate`, `browser_content`, `browser_click`, `browser_type`, `browser_scroll`, `browser_snapshot`, `browser_tabs`, `browser_console`, `browser_pdf`, `browser_screenshot` | Playwright |
 | **NetworkPlugin** | Discovery, remote access | zeroconf, netifaces |
 
 ### Creating a Plugin
@@ -430,11 +430,31 @@ Pydantic models with validation:
 
 ---
 
+## Observability
+
+### Logging (`backend/core/logging.py`)
+
+Unified logging system with:
+- **JSON Formatting**: Machine-readable logs for ingestion
+- **Timezone Support**: Configurable timestamps (e.g., `America/Los_Angeles`)
+- **Subsystem tagging**: `[agent]`, `[browser]`, `[network]`
+- **Rotation**: Daily log files with retention policy
+
+### Agent Tracing (`backend/core/agent_trace.py`)
+
+A specialized event tracing system for LLM debugging:
+- **Format**: JSON Lines (`.jsonl`)
+- **Scope**: Sessions, Turns, LLM Requests/Responses, Tool Calls
+- **Retention**: Per-session storage in `traces/` directory
+
+---
+
 ## Directory Structure
 
 ```
 agent_platform/
 ├── main.py                    # FastAPI entry point
+├── cli_chat.py                # CLI Chat Interface
 ├── config.yaml                # Configuration file
 ├── backend/
 │   ├── api/
@@ -443,6 +463,7 @@ agent_platform/
 │   │   └── gateway.py         # JSON-RPC gateway
 │   ├── core/
 │   │   ├── agent.py           # AgentExecutor
+│   │   ├── agent_trace.py     # Agent Tracing
 │   │   ├── plugins.py         # Plugin registry
 │   │   ├── registry.py        # Subagent tracking (SQLite)
 │   │   ├── queue.py           # Async task queue
