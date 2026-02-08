@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 # Default configuration
 DEFAULT_LOG_DIR = "./logs"
 DEFAULT_LOG_LEVEL = "INFO"
-DEFAULT_MAX_DAYS = 7
+DEFAULT_MAX_DAYS = 15
 DEFAULT_JSON_FORMAT = True
 DEFAULT_TIMEZONE = "UTC"
 
@@ -85,6 +85,15 @@ class ColoredConsoleFormatter(logging.Formatter):
         timestamp = datetime.now(self.tz).strftime('%H:%M:%S')
         level = record.levelname
         message = record.getMessage()
+
+        # Redundancy reduction: remove subsystem prefix if it matches
+        # E.g. "browser: Navigation started" -> "Navigation started"
+        prefix = f"{subsystem}: "
+        if message.lower().startswith(prefix.lower()):
+            message = message[len(prefix):]
+        # Also handle space separator if colon is missing but word matches exactly
+        elif message.lower().startswith(f"{subsystem} ".lower()):
+             message = message[len(subsystem)+1:]
         
         if self.use_colors:
             level_color = self.COLORS.get(level, '')

@@ -256,6 +256,47 @@ class TestColoredFormatter(unittest.TestCase):
         self.assertIn("[test_sub]", formatted)
         self.assertNotIn('\033[', formatted)
 
+    def test_redundancy_reduction(self):
+        """Test that redundancy in log messages is reduced."""
+        from backend.core.logging import ColoredConsoleFormatter
+        import logging
+        
+        formatter = ColoredConsoleFormatter(use_colors=False)
+        
+        # Test case 1: Prefix with colon
+        record1 = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0,
+            msg="test: Hello World", args=(), exc_info=None
+        )
+        record1.subsystem = "test"
+        output1 = formatter.format(record1)
+        
+        # Test case 2: Prefix with space
+        record2 = logging.LogRecord(
+            name="browser", level=logging.INFO, pathname="", lineno=0,
+            msg="browser Navigation started", args=(), exc_info=None
+        )
+        record2.subsystem = "browser"
+        output2 = formatter.format(record2)
+
+        # Test case 3: No prefix
+        record3 = logging.LogRecord(
+            name="api", level=logging.INFO, pathname="", lineno=0,
+            msg="Request received", args=(), exc_info=None
+        )
+        record3.subsystem = "api"
+        output3 = formatter.format(record3)
+        
+        # Assertions
+        # Output format is: Time [subsystem] Message
+        self.assertIn("[test] Hello World", output1)
+        self.assertNotIn("test: Hello", output1)
+        
+        self.assertIn("[browser] Navigation started", output2)
+        self.assertNotIn("browser Navigation", output2)
+        
+        self.assertIn("[api] Request received", output3)
+
 
 class TestJSONFormatter(unittest.TestCase):
     """Tests for JSON formatter."""
